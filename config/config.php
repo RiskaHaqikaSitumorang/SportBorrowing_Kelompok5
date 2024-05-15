@@ -1,168 +1,281 @@
-<?php 
-require "../../loginSystem/connect.php";
-if(isset($_POST["signUp"]) ) {
-  
-  if(signUp($_POST) > 0) {
-    echo "<script>
-    alert('Sign Up berhasil!')
-    </script>";
-  }else {
-    echo "<script>
-    alert('Sign Up gagal!')
-    </script>";
-  }
-  
+<?php
+$host = "127.0.0.1";
+$username = "root";
+$password = "";
+$database_name = "sport";
+$connection = mysqli_connect($host, $username, $password, $database_name);
+
+// === FUNCTION KHUSUS ADMIN START ===
+
+// MENAMPILKAN DATA KATEGORI ALAT OLAHRAGA
+function queryReadData($dataKategori) {
+  global $connection;
+  $result = mysqli_query($connection, $dataKategori);
+  $items = [];
+  while($item = mysqli_fetch_assoc($result)) {
+    $items[] = $item;
+  }     
+  return $items;
 }
 
-?>
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+// Menambahkan data alat olahraga 
+function tambahAlat($dataAlat) {
+  global $connection;
 
-    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
-     <script src="https://kit.fontawesome.com/de8de52639.js" crossorigin="anonymous"></script>
-     <title>Sign Up || Member</title>
-    </head>
+  $gambar =upload();
+  $idAlat = htmlspecialchars($dataAlat["id_alat"]);
+  $kategoriAlat = $dataAlat["kategori"];
+  $namaAlat = htmlspecialchars($dataAlat["nama_alat"]);
+  $merekAlat = htmlspecialchars($dataAlat["merek"]); 
+  $tahunProduksi = $dataAlat["tahun_produksi"];
+  $deskripsiAlat = htmlspecialchars($dataAlat["alat_deskripsi"]);
+  
+  if(!$gambar) {
+    return 0;
+  } 
 
-    <style>
-      body{
-        background-image: url(https://static.vecteezy.com/system/resources/previews/026/858/512/non_2x/of-a-colorful-assortment-of-sports-balls-on-a-white-background-with-copy-space-free-photo.jpg);
-      }
-      .card {
-      background-color: rgba(255, 255, 255, 0.5); /* Adjust the opacity here */
-      border-radius: 15px;
+  $queryInsertDataAlat = "INSERT INTO alat_olahraga (gambar, id_alat, kategori, nama_alat, merek, tahun_produksi, alat_deskripsi) 
+  VALUES ('$gambar', '$idAlat', '$kategoriAlat', '$namaAlat', '$merekAlat', '$tahunProduksi', '$deskripsiAlat')";
+
+  mysqli_query($connection, $queryInsertDataAlat);
+  return mysqli_affected_rows($connection);
+}     
+
+
+// Function upload gambar 
+function upload() {
+  $namaFile = $_FILES["gambar"]["name"];
+  $ukuranFile = $_FILES["gambar"]["size"];
+  $error = $_FILES["gambar"]["error"];
+  $tmpName = $_FILES["gambar"]["tmp_name"];
+  
+  // cek apakah ada gambar yg diupload
+  if($error === 4) {
+    echo "<script>
+    alert('Silahkan upload gambar alat terlebih dahulu!')
+    </script>";
+    return 0;
+  }
+  
+  // cek kesesuaian format gambar
+  $jpg = "jpg";
+  $jpeg = "jpeg";
+  $png = "png";
+  $svg = "svg";
+  $bmp = "bmp";
+  $psd = "psd";
+  $tiff = "tiff";
+  $formatGambarValid = [$jpg, $jpeg, $png, $svg, $bmp, $psd, $tiff];
+  $ekstensiGambar = explode('.', $namaFile);
+  $ekstensiGambar = strtolower(end($ekstensiGambar));
+  
+  if(!in_array($ekstensiGambar, $formatGambarValid)) {
+    echo "<script>
+    alert('Format file tidak sesuai');
+    </script>";
+    return 0;
+  }
+  
+  // batas ukuran file
+  if($ukuranFile > 2000000) {
+    echo "<script>
+    alert('Ukuran file terlalu besar!');
+    </script>";
+    return 0;
+  }
+  
+   //generate nama file baru, agar nama file tdk ada yg sama
+  $namaFileBaru = uniqid();
+  $namaFileBaru .= ".";
+  $namaFileBaru .= $ekstensiGambar;
+  
+  move_uploaded_file($tmpName, '../../imgDB/' . $namaFileBaru);
+  return $namaFileBaru;
+} 
+
+// MENAMPILKAN SESUATU SESUAI DENGAN INPUTAN USER PADA * SEARCH ENGINE *
+function search($keyword) {
+  // search data alat olahraga
+  $querySearch = "SELECT * FROM alat_olahraga 
+  WHERE
+  nama_alat LIKE '%$keyword%' OR
+  kategori LIKE '%$keyword%'
+  ";
+  return queryReadData($querySearch);
+
+
+// search data pengembalian || member
+$dataPengembalian = "SELECT * FROM pengembalian 
+WHERE 
+id_pengembalian '%$keyword%' OR
+id_alat LIKE '%$keyword%' OR
+nama_alat LIKE '%$keyword%' OR
+kategori LIKE '%$keyword%' OR
+nisn LIKE '%$keyword%' OR
+nama LIKE '%$keyword%' OR
+nama_admin LIKE '%$keyword%' OR
+tgl_pengembalian LIKE '%$keyword%' OR
+keterlambatan LIKE '%$keyword%' OR
+denda LIKE '%$keyword%'";
+return queryReadData($dataPengembalian);
+}
+
+function searchMember ($keyword) {
+   // search member terdaftar || admin
+ $searchMember = "SELECT * FROM member WHERE 
+ nisn LIKE '%$keyword%' OR 
+ kode_member LIKE '%$keyword%' OR
+ nama LIKE '%$keyword%' OR 
+ jurusan LIKE '%$keyword%'
+ ";
+ return queryReadData($searchMember);
+}
+
+// DELETE DATA Alat
+function delete($alatId) {
+  global $connection;
+  $queryDeleteAlat = "DELETE FROM alat_olahraga WHERE id_alat = '$alatId'";
+  mysqli_query($connection, $queryDeleteAlat);
+  
+  return mysqli_affected_rows($connection);
+}
+
+// UPDATE || EDIT DATA ALAT 
+function updateAlat($dataAlat) {
+  global $connection;
+
+  $gambarLama = htmlspecialchars($dataAlat["gambarLama"]);
+  $idAlat = htmlspecialchars($dataAlat["id_alat"]);
+  $kategoriAlat = $dataAlat["kategori"];
+  $namaAlat = htmlspecialchars($dataAlat["nama_alat"]);
+  $merekAlat = htmlspecialchars($dataAlat["merek"]); 
+  $tahunProduksi = $dataAlat["tahun_produksi"];
+  $deskripsiAlat = htmlspecialchars($dataAlat["alat_deskripsi"]); 
+
+  // pengecekan mengganti gambar || tidak
+  if($_FILES["gambar"]["error"] === 4) {
+      $gambar = $gambarLama;
+  } else {
+      $gambar = upload();
+  }
+
+  $queryUpdate = "UPDATE alat_olahraga SET 
+      gambar = '$gambar',
+      id_alat = '$idAlat',
+      kategori = '$kategoriAlat',
+      nama_alat = '$namaAlat',
+      merek = '$merekAlat',
+      tahun_produksi = '$tahunProduksi',
+      alat_deskripsi = '$deskripsiAlat'
+      WHERE id_alat = '$idAlat'
+  ";
+
+  mysqli_query($connection, $queryUpdate);
+  return mysqli_affected_rows($connection);
+}
+
+
+// Hapus member yang terdaftar
+function deleteMember($nisnMember) {
+  global $connection;
+  
+  $deleteMember = "DELETE FROM member WHERE nisn = $nisnMember";
+  mysqli_query($connection, $deleteMember);
+  return mysqli_affected_rows($connection);
+}
+
+// Hapus history pengembalian data ALAT
+function deleteDataPengembalian($idPengembalian) {
+  global $connection;
+  
+  $deleteDataPengembalianAlat = "DELETE FROM pengembalian WHERE id_pengembalian = $idPengembalian";
+  mysqli_query($connection, $deleteDataPengembalianAlat);
+  return mysqli_affected_rows($connection);
+}
+// === FUNCTION KHUSUS ADMIN END ===
+
+
+// === FUNCTION KHUSUS MEMBER START ===
+// Peminjaman ALAT
+function pinjamAlat($dataAlat) {
+  global $connection;
+
+  $idAlat = $dataAlat["id_alat"];
+  $nisn = $dataAlat["nisn"];
+  $idAdmin = $dataAlat["id_admin"];
+  $tglPinjam = $dataAlat["tgl_pinjam"]; // Perbaikan disini
+  $tglKembali = $dataAlat["tgl_pengembalian"]; // Perbaikan disini
+
+  // Cek apakah user memiliki denda
+  $cekDenda = mysqli_query($connection, "SELECT denda FROM pengembalian WHERE nisn = $nisn && denda > 0");
+  if (mysqli_num_rows($cekDenda) > 0) {
+    $item = mysqli_fetch_assoc($cekDenda);
+    $jumlahDenda = $item["denda"];
+    if ($jumlahDenda > 0) {
+      echo "<script>
+       alert('Anda belum melunasi denda, silahkan lakukan pembayaran terlebih dahulu !');
+       </script>";
+      return 0;
     }
-    </style>
-  <body>
-    
-  <div class="container">
-    <div class="card p-2 mt-5">
-      <div class="position-absolute top-0 start-50 translate-middle">
-        <img src="../../assets/memberLogo.png" alt="adminLogo" width="85px">
-      </div>
-      <h1 class="pt-5 text-center fw-bold">Sign Up</h1>
-      <hr>
-    <form action="" method="post" class="row g-3 p-4 needs-validation" novalidate>
-      
-    <label for="validationCustom01" class="form-label">Nisn</label>
-    <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-hashtag"></i></span>
-    <input type="number" class="form-control" name="nisn" id="validationCustom01" required>
-    <div class="invalid-feedback">
-        Nisn wajib diisi!
-    </div>
-  </div>
-    <label for="validationCustom01" class="form-label">Kode Member</label>
-  <div class="input-group mt-0">
-    <input type="text" class="form-control" name="kode_member" id="validationCustom01" required>
-    <div class="invalid-feedback">
-        Kode member wajib diisi!
-    </div>
-  </div>
-  <label for="validationCustom02" class="form-label">Nama Lengkap</label>
-  <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-user"></i></span>
-    <input type="text" class="form-control" id="validationCustom02" name="nama" required>
-    <div class="invalid-feedback">
-        Nama wajib diisi!
-    </div>
-  </div>
-  <label for="validationCustom02" class="form-label">Password</label>
-  <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-lock"></i></span>
-    <input type="password" class="form-control" id="validationCustom02" name="password" required>
-    <div class="invalid-feedback">
-        Password wajib diisi!
-    </div>
-  </div>
-  <label for="validationCustom02" class="form-label">Confirm Password</label>
-  <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-lock"></i></span>
-    <input type="password" class="form-control" id="validationCustom02" name="confirmPw" required>
-    <div class="invalid-feedback">
-        Konfirmasi password wajib diisi!
-    </div>
-  </div>
-  
-  <div class="col input-group mb-2">
-  <label class="input-group-text" for="inputGroupSelect01">Gender</label>
-  <select class="form-select" id="inputGroupSelect01" name="jenis_kelamin">
-    <option selected>Choose</option>
-    <option value="Laki laki">Laki laki</option>
-    <option value="Perempuan">Perempuan</option>
-    </select>
-  </div>
-  
-  <div class="col input-group mb-2">
-  <label class="input-group-text" for="inputGroupSelect01">Kelas</label>
-  <select class="form-select" id="inputGroupSelect01" name="kelas">
-    <option selected>Choose</option>
-    <option value="X">X</option>
-    <option value="XI">XI</option>
-    <option value="XII">XII</option>
-    </select>
-  </div>
-  
-  <div class="input-group mb-2">
-  <label class="input-group-text" for="inputGroupSelect01">Jurusan</label>
-  <select class="form-select" id="inputGroupSelect01" name="jurusan">
-    <option selected>Choose</option>
-    <option value="MIPA">MIPA</option>
-    <option value="IPS">IPS</option>
-  </div>
-  
-  <label for="validationCustom01" class="form-label">No Telepon</label>
-  <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-phone"></i></span>
-    <input type="number" class="form-control" name="no_tlp" id="validationCustom01" required>
-    <div class="invalid-feedback">
-        No telepon wajib diisi!
-    </div>
-  </div>
-  
-  <label for="validationCustom01" class="form-label">Tanggal Pendaftaran</label>
-  <div class="input-group mt-0">
-    <span class="input-group-text" id="basic-addon1"><i class="fa-solid fa-calendar-days"></i></span>
-    <input type="date" class="form-control" name="tgl_pendaftaran" id="validationCustom01" required>
-    <div class="invalid-feedback">
-        Tanggal pendaftaran wajib diisi!
-    </div>
-  </div>
-  
-  <div class="col-12">
-    <button class="btn btn-primary" type="submit" name="signUp">Sign Up</button>
-    <input type="reset" class="btn btn-warning text-light" value="Reset">
-  </div>
-  <p>Sudah punya akun? <a href="sign_in.php" class="text-decoration-none text-primary">Masuk</a></p>
-</form>
-</div>
-  </div>
-</body>
-  
-<script>
-    // Example starter JavaScript for disabling form submissions if there are invalid fields
-(() => {
-  'use strict'
+  }
+  // Cek batas user meminjam alat berdasarkan nisn
+  $nisnResult = mysqli_query($connection, "SELECT nisn FROM peminjaman WHERE nisn = $nisn");
+  if (mysqli_fetch_assoc($nisnResult)) {
+    echo "<script>
+    alert('Anda sudah meminjam alat, Harap kembalikan dahulu alat yg anda pinjam!');
+    </script>";
+    return 0;
+  }
 
-  // Fetch all the forms we want to apply custom Bootstrap validation styles to
-  const forms = document.querySelectorAll('.needs-validation')
+  $queryPinjam = "INSERT INTO peminjaman VALUES(null, '$idAlat', $nisn, $idAdmin, '$tglPinjam', '$tglKembali')";
+  mysqli_query($connection, $queryPinjam);
+  return mysqli_affected_rows($connection);
+}
 
-  // Loop over them and prevent submission
-  Array.from(forms).forEach(form => {
-    form.addEventListener('submit', event => {
-      if (!form.checkValidity()) {
-        event.preventDefault()
-        event.stopPropagation()
-      }
 
-      form.classList.add('was-validated')
-    }, false)
-  })
-})()
-  </script>
+// Pengembalian ALAT
+function pengembalianAlat($dataAlat) {
+  global $connection;
   
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
-</html>
+  // Variabel pengembalian
+  $idPeminjaman = $dataAlat["id_peminjaman"];
+  $idAlat = $dataAlat["id_alat"];
+  $nisn = $dataAlat["nisn"];
+  $idAdmin = $dataAlat["id_admin"];
+  $tenggatPengembalian = $dataAlat["tgl_pengembalian"];
+  $alatKembali = $dataAlat["alat_kembali"];
+  $keterlambatan = $dataAlat["keterlambatan"];
+  $denda = $dataAlat["denda"];
+  
+  
+  if($alatKembali > $tenggatPengembalian) {
+    echo "<script>
+    alert('Anda terlambat mengembalikan alat, harap bayar denda sesuai dengan jumlah yang ditentukan!');
+    </script>";
+  }
+  // Menghapus data siswa yang sudah mengembalikan alat
+  $hapusDataPeminjam = "DELETE FROM peminjaman WHERE id_peminjaman = $idPeminjaman";
+
+  // Memasukkan data kedalam tabel pengembalian
+  $queryPengembalian = "INSERT INTO pengembalian VALUES(null, $idPeminjaman, '$idAlat', $nisn, $idAdmin, '$alatKembali', '$keterlambatan', $denda)";
+
+  
+  mysqli_query($connection, $hapusDataPeminjam);
+  mysqli_query($connection, $queryPengembalian);
+  return mysqli_affected_rows($connection);
+}
+
+function bayarDendaAlat($data) {
+  global $connection;
+  $idPengembalian = $data["id_pengembalian"];
+  $jmlDenda = $data["denda"];
+  $jmlDibayar = $data["bayarDenda"];
+  $calculate = $jmlDenda - $jmlDibayar;
+  
+  $bayarDenda = "UPDATE pengembalian SET denda = $calculate WHERE id_pengembalian = $idPengembalian";
+  mysqli_query($connection, $bayarDenda);
+  return mysqli_affected_rows($connection);
+}
+
+// === FUNCTION KHUSUS MEMBER END ===
+?>
